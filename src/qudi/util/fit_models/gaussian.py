@@ -20,7 +20,8 @@ You should have received a copy of the GNU Lesser General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-__all__ = ('DoubleGaussian', 'Gaussian', 'Gaussian2D', 'TripleGaussian', 'multiple_gaussian')
+__all__ = ['DoubleGaussian', 'Gaussian', 'Gaussian2D', 'TripleGaussian', 'GaussianLinear',
+           'multiple_gaussian']
 
 import numpy as np
 from qudi.util.fit_models.model import FitModelBase, estimator
@@ -94,9 +95,16 @@ class Gaussian(FitModelBase):
                 i += direction
             i0, i1 = (i, i + 1) if direction > 1 else (i - 1, i)
 
+<<<<<<< HEAD
             x0, y0 = x[i0], smooth[i0]
             x1, y1 = x[i1], smooth[i1]
             return x0 + (half_max - y0) * (x1 - x0) / (y1 - y0) if y1 != y0 else x0
+=======
+        # according to the derived formula, calculate sigma. The crucial part is here that the
+        # offset was estimated correctly, then the area under the curve is calculated correctly:
+        numerical_integral = np.trapezoid(data_smoothed, x)
+        sigma = abs(numerical_integral / (np.sqrt(2 * np.pi) * amplitude))
+>>>>>>> dc69be418843ca9124106aeed3af153e822cec51
 
         left_edge  = interp_edge(idx_peak, -1)
         right_edge = interp_edge(idx_peak, +1)
