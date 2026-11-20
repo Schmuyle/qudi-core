@@ -78,7 +78,7 @@ class MicrowaveSRSSG(MicrowaveInterface):
         )
 
         # Reset device
-        self._write('*RST')
+        #self._write('*RST')
         self._write('ENBR 0')  # turn off Type N output
         self._write('ENBL 0')  # turn off BNC output
 

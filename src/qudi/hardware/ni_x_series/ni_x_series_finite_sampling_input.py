@@ -22,6 +22,7 @@ If not, see <https://www.gnu.org/licenses/>.
 """
 
 import ctypes
+from os import system
 import time
 import numpy as np
 import nidaqmx as ni
@@ -120,6 +121,8 @@ class NIXSeriesFiniteSamplingInput(FiniteSamplingInputInterface):
         """
         Starts up the NI-card and performs sanity checks.
         """
+        system = ni.system.System.local()
+        print([d.name for d in system.devices])
         self._digital_channel_units = dict() if not self._digital_channel_units else self._digital_channel_units
         self._digital_channel_units = {self._extract_terminal(key): value
                                        for key, value in self._digital_channel_units.items()}
@@ -149,6 +152,8 @@ class NIXSeriesFiniteSamplingInput(FiniteSamplingInputInterface):
         self.__all_analog_terminals = tuple(
             term.rsplit('/', 1)[-1].lower() for term in self._device_handle.ai_physical_chans.channel_names)
 
+        self.log.info(f"Analog terminals: {self.__all_analog_terminals}")
+        self.log.info(f"Digital terminals: {self.__all_digital_terminals}")
         # Check digital input terminals
         digital_sources = set(src for src in self._digital_channel_units)
         if digital_sources:

@@ -93,7 +93,7 @@ class MicrowaveSMR(MicrowaveInterface):
         self._model = self._device.query('*IDN?').strip().split(',')[1]
         # Reset device
         self._device.write(':SYSTem:PRESet')
-        self._device.write('*RST')
+        #self._device.write('*RST')
         self._device.write(':OUTP OFF')
 
         # Generate constraints

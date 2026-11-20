@@ -76,8 +76,9 @@ class MicrowaveSmbv(MicrowaveInterface):
 
         self._model = self._device.query('*IDN?').split(',')[1]
         # Reset device
-        self._command_wait('*CLS')
-        self._command_wait('*RST')
+        #self._command_wait('*CLS')
+        #self._command_wait('*RST')
+        print("I'm a cunt")
 
         # Generate constraints
         if self._model == 'SMB100A':

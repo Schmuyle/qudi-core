@@ -1,0 +1,206 @@
+import numpy as np
+import visa
+import warnings
+import matplotlib.pyplot as plt
+import h5py
+import time
+from scipy.interpolate import interp1d
+
+
+
+
+class TaborAWG():
+    """TaborAWG:
+        module.Class: 'tabor.tabor_func_russ.TaborAWG'
+        address: 'TCPIP::192.168.68.176::5025::SOCKET'
+    """ 
+        
+        
+    def __init__(self):
+        print("Connect to Tabor AWG.")
+        rm = visa.ResourceManager()
+        tbname =  'TCPIP::192.168.68.176::5025::SOCKET' # update IP
+        self.tawg = rm.open_resource(tbname, read_termination = "\n", write_termination = "\n")
+        devstring = self.tawg.query("*IDN?")
+        self.tawg.write("*CLS")
+        print(devstring)
+        
+        # this configures for hardware triggering. Change for your application (":INIT:CONT ON" should enable software trigger). 
+        for cho in [1,2,3,4]:
+            self.send_cmd(':INST:CHAN '+str(cho))
+            self.tawg.query(":INIT:CONT OFF; *OPC?")
+            self.tawg.query(":TRIG:SEL TRG1; *OPC?") #comment this for software trigger
+            self.tawg.query(":TRIG:STAT ON; *OPC?") #comment this for software trigger
+            self.tawg.query(":TRIG:MODE IMM; *OPC?")
+            self.tawg.query(":TRIG:LTJ ON; *OPC?")
+            status = self.tawg.query(":TRIG:STAT?")
+            
+            self.tawg.query(":TRIG:SOUR:ENAB TRG1; *OPC?") #comment this for software trigger
+            
+            self.tawg.query(":TRIG:LEV 0.5; *OPC?") #comment this for software trigger
+            self.tawg.query(":TRIG:WIDT 0E-09; *OPC?") #comment this for software trigger
+            self.tawg.query(":TRIG:COUN 1; *OPC?") #comment this for software trigger
+            print(status)
+        
+
+    def send_cmd(self, cmd_str, paranoia_level=1):
+
+        if paranoia_level == 1:
+            ask_str = cmd_str.rstrip()
+            if len(ask_str) > 0:
+                ask_str += '; *OPC?'
+            else:
+                ask_str = '*OPC?'
+            _ = self.tawg.query(ask_str)
+
+            
+
+        elif paranoia_level >= 2:
+            ask_str = cmd_str.rstrip()
+            if len(ask_str) > 0:
+                ask_str += '; :SYST:ERR?'
+            else:
+                ask_str = ':SYST:ERR?'
+            syst_err = self.tawg.query(ask_str)
+            try:
+                errnb = int(syst_err.split(',')[0])
+            except visa.VisaIOError:
+                errnb = -1
+            if errnb != 0:
+                syst_err = syst_err.rstrip()
+                wrn_msg = 'ERR: "{0}" after CMD: "{1}"'.format(syst_err, cmd_str)
+                _ = self.tawg.query('*CLS; *OPC?')  # clear the error-list
+                if paranoia_level >= 3:
+                    raise NameError(wrn_msg)
+                else:
+                    warnings.warn(wrn_msg)
+
+        else:
+            self.tawg.write(cmd_str)
+
+    def On(self):
+        print("ON called")
+        for ch in range(4):
+            self.send_cmd(':INST:CHAN '+str(ch+1))
+            self.send_cmd('OUTP ON')
+        
+    def set_amplitude(self, channel = 1, amplitude = 0):
+
+        self.send_cmd(':INST:CHAN '+str(channel))
+        self.send_cmd(":SOUR:VOLT "+str(amplitude))
+
+    def set_awg_sample_rate(self, awg_sample_rate):
+        self.awg_samp_rate = awg_sample_rate
+        self.send_cmd(":SOUR:FREQ:RAST {}".format(awg_sample_rate), paranoia_level = 0)
+        
+    def get_awg_sample_rate(self):
+
+        self.awg_samp_rate = float(self.tawg.query(":SOUR:FREQ:RAST?"))
+        return self.awg_samp_rate
+
+    def Off(self):
+       print("OFF called")
+       for ch in range(4):
+        self.send_cmd(':INST:CHAN '+str(ch))
+        self.send_cmd('OUTP OFF')    
+
+    # main function
+    def analog_samples_tabor(self, analog_samples):
+        chan_dic = {"a_ch1":1, "a_ch2":2, "a_ch3":3, "a_ch4":4}
+        
+        # Uncomment to create h5 file to check waveforms
+        # with h5py.File('analogchanneltest-r.h5', 'w') as hf:
+            # for key in analog_samples:
+                # hf.create_dataset(key, data = analog_samples[key])
+                
+                
+        wavdic = {}
+        for cho in list(analog_samples.keys()):
+            data =[analog_samples[cho]]
+            print('Number of Original Analog Samples ' + str(len(data[0])))
+
+            streamersampfreq = int(1e9)
+            sampfreq = int(self.awg_samp_rate)    
+            ratio = int(streamersampfreq/sampfreq)
+        
+            if ratio >=1:
+            
+            
+                data = np.array(data)
+                data = ((data[0])[250:])[::ratio]#this removes the AWG trigger element to ensure sync between the two channels.
+                print('Undersampling. New Analog Samples ' + str(len(data)))
+            elif ratio <1:
+                data = np.array(data)
+                data = ((data[0])[250:])
+                times = np.arange(0,len(data), 1)#times sampled at 1ns
+                f = interp1d(times, data)
+                timestep = 1.0e9/sampfreq #in ns
+                newtimes = np.arange(0, max(times), timestep)
+                newdata = f(newtimes)
+                data = newdata
+                print('Oversampling. New Analog Samples ' + str(len(data)))
+            
+        
+            data = np.hstack((data,np.zeros(32 - np.mod(len(data),32))))
+            # if len(data) >= 512e3:
+                # print("Number of samples exceeds AWG memory. Adjust sample freq.")
+            amp = max(np.abs(data))    
+                
+            self.set_amplitude(channel = chan_dic[cho], amplitude = amp)
+            # Get the available memory in bytes of wavform-data (per DDR):
+            
+            self.send_cmd(':INST:CHAN '+str(chan_dic[cho])) # selects channel on AWG for commands below
+            print('SELECTING CHANNEL') # selects channel on AWG for commands below
+            print(':INST:SEL '+str(chan_dic[cho])) # selects channel on AWG for commands below
+
+
+            self.send_cmd(":SOUR:FUNC:MODE ARB")
+            self.send_cmd(":SOUR:FUNC:MODE:SEGM "+str(chan_dic[cho]))
+
+            resp = self.tawg.query(":TRACe:FREE?")
+            arbmem_capacity = int(resp)
+            print("Available memory per DDR: {0:,} wave-bytes".format(arbmem_capacity))
+
+            self.send_cmd(":SOUR:FREQ:RAST {}".format(sampfreq), paranoia_level = 0)
+        
+            bitness = 16
+            max_dac = (2 ** bitness - 1)
+            half_dac = max_dac / 2.0
+            
+            if amp == 0:
+                amp = 1
+        
+            y = (data/amp + 1 ) * half_dac
+            y = np.round(y)
+            y = np.clip(y, -max_dac, max_dac)
+            wav = y.astype(np.uint16)
+            wavdic[cho] = wav
+            
+            # save wav to dict
+        
+            cmd = ':TRAC:DEF {0}, {1}'.format(chan_dic[cho], len(data))
+            self.send_cmd(cmd, paranoia_level = 1)
+        
+            cmd = ':TRAC:SEL {0}'.format(chan_dic[cho])
+            self.send_cmd(cmd, paranoia_level = 1)
+            self.tawg.timeout = 10000
+            t_write=time.time()
+            self.tawg.write_binary_values('*OPC?;:TRAC:DATA', wav, 'H')
+            print('time taken to write to awg: '+str(time.time() - t_write)+' seconds')
+            status = 0
+            while status <1:
+                print("Trying...")
+                status = int(self.tawg.read())
+                print("Done.")
+            print("Finished sending samples to AWG.")  
+
+            resp = self.tawg.query(":TRACe:FREE?")
+            arbmem_capacity2 = int(resp)
+            if arbmem_capacity2 != arbmem_capacity:
+                print("Programming successful.")
+                print("After prgm:: {0:,} wave-bytes".format(arbmem_capacity2)) 
+            else:
+                print("WARNING! no change in waveform memory. Ignore if new waveform is identical to old.")
+        
+                
+        return len(data)

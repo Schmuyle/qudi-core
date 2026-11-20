@@ -3,13 +3,36 @@
 ## Pre-Release
 
 ### Breaking Changes
+- Improved pulse envelope handling by introducing the `PulseEnvelope` `dataclass`
+- Improved representation of `DDMethods` to properly store it in measurement data
+- Improved representation of `PulseEnvelopeType` to properly store it in measurement data
 
 ### Bugfixes
 - Fix `installtion.py` for arbitrary Python versions
+- Fixed tests for `rpyc>6`
+- Fixed `sequence_generator_logic` configuration in `default.cfg`
+- Fix several `POIManagerGUI` `PySide6` bugs
+- Fix discovery of `AltPlotMethodBase` subclasses
+- Fix NI IO for only analog input channels.
+- bug fixes for millennia eV laser
+- Fixed data trace generation for `FastCounterDummy` in gated and ungated modes, so that measurements yield a clean oscillation for an arbitrary number of points
+- Fixed laser polling in `laser_logic.LaserLogic._query_loop_body` to leave `laser_logic` stuck in locked module state
 
 ### New Features
+- Refactored pulsed logic modules to use module finder that was added to core
+- Added hardware file `hardware.ni_x_series.ni_x_series_counter` to use NI 63xx cards as fastcounters for pulsed measurements.
+- Added resizeable `PulseBlockEditor` columns in `pulsed_gui`
+- Added pulse shaping to the `pulsed` tool chain
+- supporting custom alternative plots in pulsed analysis
+- Added selectable `ScanningOptimizeLogic` optimization methods
+- Added `gaussian unrestricted` and `maximum` optimization methods to `ScanningOptimizeLogic`
+- Supported pyvisa for coherent obis laser
+- Added Magnet Toolchain
 
 ### Other
+- Disabled workflow triggers on a draft PR
+- Displaying Qudi logs in the test workflow upon test failure
+- Fixed automatic testing workflows
 
 ## Version 1.0.0
 
@@ -36,6 +59,8 @@
 - Added workflows for verifying that new versions of dependencies do not break qudi
 - Added improved Gaussian fit methods to the Repo, replacing `qudi-core`'s Gaussian fit methods
 - Added the `PredefinedGeneratorBase._get_sequence_count_length` method to easily and correctly determine the count length of `PulseSequence` objects similar to `PredefinedGeneratorBase._get_ensemble_count_length`
+- Restricted `gaussian` optimization logic to optimization range
+- Added ability to toggle laser polling in the laser GUI
 
 ### Other
 - Updated versions for Github actions to fix Node.js 20 deprecation warnings
@@ -47,6 +72,7 @@
 - Updated install documentation
 - Improved Github Actions dependency testing
 - Added tests for scanning tool chain
+- No more automatic multi-switch channel deactivation on the wavemeter by the `high_finesse_proxy` upon starting/stopping of instreamers. Only reactivate channels (e.g. after deactivation through GUI) if they are associated to a running instreamer.
 
 ## Version 0.6.0
 

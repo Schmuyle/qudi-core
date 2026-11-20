@@ -61,7 +61,7 @@ class E3631A(Base, ProcessControlInterface):
 
         self.model = self._query('*IDN?').split(',')[1]
 
-        self._write("*RST;*CLS")
+        #self._write("*RST;*CLS")
         time.sleep(3)
         self._query("*OPC?")
 

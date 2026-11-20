@@ -22,15 +22,14 @@ If not, see <https://www.gnu.org/licenses/>.
 
 import os
 import importlib
-import sys
 import inspect
 import copy
 import logging
 import numpy as np
 from enum import Enum, EnumMeta
+from dataclasses import dataclass, field
 
-from qudi.util.helpers import iter_modules_recursive
-
+from qudi.util.module_finder import get_module_names_from_ns, iter_directory_module_names
 ##############################################################
 # Helper class for everything that need dynamical decoupling #
 ##############################################################
@@ -99,6 +98,10 @@ class DDMethods(Enum):
     def phases(self):
         return np.array(self._phases)
 
+    def __repr__(self):
+        return f"{self.__class__.__module__}.{self.__class__.__name__}({self.value})"
+
+
 class SamplingBase:
     """
     Base class for all sampling functions
@@ -166,24 +169,15 @@ class SamplingFunctions:
         except NameError:
             import qudi.logic.pulsed.sampling_function_defs as _default_sf_ns
 
-        for mod_finder in iter_modules_recursive(_default_sf_ns.__path__,
-                                                 _default_sf_ns.__name__ + '.'):
+        for module_name in get_module_names_from_ns(_default_sf_ns):
+            module_names.append(module_name)
 
-            module_names.append(mod_finder.name)
 
         # Import from additional directories
         for path in path_list:
             if not os.path.exists(path):
                 continue
-            # Get all python modules to import from.
-            module_list = [name[:-3] for name in os.listdir(path) if
-                           os.path.isfile(os.path.join(path, name)) and name.endswith('.py')]
-
-            # append import path to sys.path
-            if path not in sys.path:
-                sys.path.append(path)
-
-            module_names.extend(str(name) for name in module_list)
+            module_names.extend(iter_directory_module_names(path))
 
         # Go through all modules and get all sampling function classes.
         param_dict = dict()
@@ -240,29 +234,32 @@ class PulseEnvelopeType(Enum, metaclass=PulseEnvelopeTypeMeta):
     optimal = 'optimal'
     from_gen_settings = '_from_gen_settings'
 
-    def __init__(self, *args):
-        self._parameters = self.default_parameters
+    def __repr__(self):
+        return f"{self.__class__.__module__}.{self.__class__.__name__}.{self.value}"
+
+@dataclass
+class PulseEnvelope:
+    type: PulseEnvelopeType
+    parameters: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.parameters:
+            self.parameters = self.default_parameters
 
     @property
-    def default_parameters(self):
+    def default_parameters(self) -> dict:
         defaults = {'rectangle': {},
-                    'parabola': {'order_P': 1},
+                    'parabola': {'order': 1},
                     'optimal': {},
-                    'sin_n': {'order_n': 2},
+                    'sin_n': {'order': 2},
                     '_from_gen_settings': {}}
 
-        return defaults[self.value]
-
-    @property
-    def parameters(self):
-        return self._parameters
-
-    @parameters.setter
-    def parameters(self, param_dict):
-        self._parameters = param_dict
+        return defaults[self.type.value]
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.value}))"
+        return f"{self.__class__.__module__}.{self.__class__.__name__}({repr(self.type)}, {self.parameters})"
 
-
+    @classmethod
+    def from_dict(cls, parameters: dict) -> "PulseEnvelope":
+        return PulseEnvelope(parameters["type"], parameters["parameters"])
 
